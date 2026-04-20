@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thread Pool Simulator — 4 Threads · 1000 Tasks</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #080b10;
+      --surface:   #0e1420;
+      --card:      #131926;
+      --border:    #1e2a3a;
+      --accent:    #00e5a0;
+      --accent2:   #0090ff;
+      --warn:      #f5a623;
+      --danger:    #ff4d6a;
+      --text:      #e2e8f0;
+      --muted:     #556070;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Syne', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 32px 24px 60px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+    .header-left h1 span { color: var(--accent); }
+    .header-left p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+      font-family: var(--mono);
+    }
+    .badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+    .badge-green { color: var(--accent); border-color: var(--accent); background: rgba(0,229,160,.07); }
+    .badge-blue  { color: var(--accent2); border-color: var(--accent2); background: rgba(0,144,255,.07); }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button {
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 20px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      transition: all .15s;
+      letter-spacing: .02em;
+    }
+    button:hover { background: var(--surface); border-color: #2e3e52; }
+    button:active { transform: scale(0.97); }
+    .btn-start {
+      background: var(--accent);
+      color: #080b10;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    .btn-start:hover { background: #00ffb3; border-color: #00ffb3; }
+    .btn-start:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-reset { color: var(--danger); border-color: rgba(255,77,106,.3); }
+    .btn-reset:hover { background: rgba(255,77,106,.08); border-color: var(--danger); }
+    .speed-wrap {
+      display: flex; align-items: center; gap: 10px;
+      margin-left: auto;
+      font-family: var(--mono); font-size: 12px; color: var(--muted);
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100px; height: 4px;
+      background: var(--border);
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg);
+    }
+    .speed-val {
+      color: var(--accent);
+      font-weight: 600;
+      min-width: 28px;
+    }
+
+    /* ── Stats ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .stat-value.green  { color: var(--accent); }
+    .stat-value.blue   { color: var(--accent2); }
+    .stat-value.orange { color: var(--warn); }
+
+    /* ── Done Banner ── */
+    .done-banner {
+      display: none;
+      background: rgba(0,229,160,.07);
+      border: 1px solid rgba(0,229,160,.3);
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 28px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+    }
+
+    /* ── Thread Cards ── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 10px;
+    }
+    .thread-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .thread-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 110px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .2s, background .2s;
+    }
+    .thread-card.running {
+      border-color: rgba(0,229,160,.4);
+      background: rgba(0,229,160,.04);
+    }
+    .thread-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      margin-bottom: 10px;
+      transition: background .2s;
+    }
+    .thread-card.running .thread-dot {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+    .thread-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      letter-spacing: .02em;
+    }
+    .thread-status {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .thread-card.running .thread-status { color: var(--accent); }
+    .thread-task {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .thread-done-count {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .progress-bar {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 0 2px 0 0;
+      transition: width .08s linear;
+    }
+    .thread-card:not(.running) .progress-bar { display: none; }
+
+    /* ── Queue Bar ── */
+    .queue-section { margin-bottom: 28px; }
+    .queue-track {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      height: 12px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .queue-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 8px;
+      transition: width .4s ease;
+    }
+    .queue-meta {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── Throughput ── */
+    .tp-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .tp-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .tp-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 4px;
+    }
+    .tp-value {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ── Log ── */
+    .log-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .log-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .log-header span {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+    .log-dot { width:6px; height:6px; border-radius:50%; background: var(--accent); display:inline-block; margin-right:6px; }
+    .log-body {
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 8px 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .log-body::-webkit-scrollbar { width: 4px; }
+    .log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .log-entry {
+      display: flex;
+      gap: 12px;
+      padding: 4px 16px;
+      font-family: var(--mono);
+      font-size: 11px;
+      border-bottom: 1px solid rgba(30,42,58,.5);
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--muted); min-width: 48px; }
+    .log-thread { min-width: 60px; color: var(--muted); }
+    .log-msg.start  { color: var(--accent); }
+    .log-msg.done   { color: var(--accent2); }
+    .log-msg.system { color: var(--warn); }
+    .log-msg.finish { color: #fff; font-weight: 600; }
+
+    @media (max-width: 700px) {
+      .stats-row { grid-template-columns: repeat(3,1fr); }
+      .thread-grid { grid-template-columns: repeat(2,1fr); }
+      .tp-row { grid-template-columns: repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Thread Pool <span>Simulator</span></h1>
+      <p>scalable thread management library · OS project</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="badge badge-green">4 threads</span>
+      <span class="badge badge-blue">1000 tasks</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-start" id="startBtn" onclick="startSim()">▶ Start Simulation</button>
+    <button class="btn-reset" onclick="resetSim()">↺ Reset</button>
+    <div class="speed-wrap">
+      <span>Speed</span>
+      <input type="range" id="speedSlider" min="1" max="10" value="4" step="1" oninput="updateSpeed(this.value)">
+      <span class="speed-val" id="speedVal">4×</span>
+    </div>
+  </div>
+
+  <div id="doneBanner" class="done-banner"></div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="stat-label">Threads</div><div class="stat-value" id="sThreads">4</div></div>
+    <div class="stat"><div class="stat-label">Active</div><div class="stat-value green" id="sActive">0</div></div>
+    <div class="stat"><div class="stat-label">Queued</div><div class="stat-value orange" id="sQueued">1000</div></div>
+    <div class="stat"><div class="stat-label">Completed</div><div class="stat-value blue" id="sDone">0</div></div>
+    <div class="stat"><div class="stat-label">Elapsed</div><div class="stat-value" id="sElapsed">0.0s</div></div>
+  </div>
+
+  <div style="margin-bottom:28px">
+    <div class="section-label">Thread pool</div>
+    <div class="thread-grid" id="threadGrid"></div>
+  </div>
+
+  <div class="queue-section">
+    <div class="section-label">Queue progress</div>
+    <div class="queue-track"><div class="queue-fill" id="queueFill" style="width:0%"></div></div>
+    <div class="queue-meta">
+      <span id="qLeft">0 / 1000 completed</span>
+      <span id="qPct">0%</span>
+    </div>
+  </div>
+
+  <div class="tp-row">
+    <div class="tp-card"><div class="tp-label">Throughput</div><div class="tp-value" id="tpRate">—</div></div>
+    <div class="tp-card"><div class="tp-label">Avg task duration</div><div class="tp-value" id="tpAvg">—</div></div>
+    <div class="tp-card"><div class="tp-label">Est. time remaining</div><div class="tp-value" id="tpEta">—</div></div>
+  </div>
+
+  <div class="section-label">Execution log</div>
+  <div class="log-wrap">
+    <div class="log-header">
+      <span><span class="log-dot"></span>live output</span>
+      <span id="logCount">0 entries</span>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+
+  <script>
+    const TOTAL = 1200;
+    const NUM_THREADS = 4;
+    let speedMult = 4;
+
+    let taskQueue = [];
+    let taskCounter = 1;
+    let completedCount = 0;
+    let threadStates = [];
+    let threadTimers = [];
+    let progIntervals = [];
+    let elapsedInterval = null;
+    let startTime = null;
+    let simRunning = false;
+    let taskDurations = [];
+    let logEntryCount = 0;
+
+    function initThreads() {
+      threadStates = Array.from({length: NUM_THREADS}, (_, i) => ({
+        id: i + 1, busy: false, taskId: null, tasksCompleted: 0
+      }));
+      renderGrid();
+    }
+
+    function renderGrid() {
+      const g = document.getElementById('threadGrid');
+      g.innerHTML = '';
+      threadStates.forEach(t => {
+        const d = document.createElement('div');
+        d.className = 'thread-card idle';
+        d.id = 'tc-' + t.id;
+        d.innerHTML = `
+          <span class="thread-dot"></span>
+          <div class="thread-name">Thread ${t.id}</div>
+          <div class="thread-status">Idle</div>
+          <div class="thread-task">—</div>
+          <div class="thread-done-count" id="tbadge-${t.id}">0 tasks completed</div>
+          <div class="progress-bar" id="prog-${t.id}" style="width:0%"></div>
+        `;
+        g.appendChild(d);
+      });
+    }
+
+    function setCard(tid, busy, taskId) {
+      const c = document.getElementById('tc-' + tid);
+      if (!c) return;
+      c.className = 'thread-card ' + (busy ? 'running' : 'idle');
+      c.querySelector('.thread-status').textContent = busy ? 'Running' : 'Idle';
+      c.querySelector('.thread-task').textContent = busy ? 'Task #' + taskId : '—';
+      const p = document.getElementById('prog-' + tid);
+      if (p) p.style.width = '0%';
+    }
+
+    function updateStats() {
+      const active = threadStates.filter(t => t.busy).length;
+      document.getElementById('sActive').textContent = active;
+      document.getElementById('sQueued').textContent = taskQueue.length;
+      document.getElementById('sDone').textContent = completedCount;
+
+      const pct = Math.round((completedCount / TOTAL) * 100);
+      document.getElementById('queueFill').style.width = pct + '%';
+      document.getElementById('qLeft').textContent = completedCount + ' / ' + TOTAL + ' completed';
+      document.getElementById('qPct').textContent = pct + '%';
+
+      if (startTime && completedCount > 0) {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const rate = (completedCount / elapsed).toFixed(1);
+        document.getElementById('tpRate').textContent = rate + ' tasks/s';
+        if (taskDurations.length > 0) {
+          const avg = taskDurations.reduce((a, b) => a + b, 0) / taskDurations.length;
+          document.getElementById('tpAvg').textContent = avg.toFixed(0) + 'ms';
+          const remaining = TOTAL - completedCount;
+          if (remaining > 0) {
+            const eta = ((remaining / NUM_THREADS) * (avg / 1000)).toFixed(1);
+            document.getElementById('tpEta').textContent = eta + 's';
+          } else {
+            document.getElementById('tpEta').textContent = 'Done!';
+          }
+        }
+      }
+    }
+
+    let logBuffer = [];
+    let logFlushPending = false;
+
+    function addLog(threadId, msg, type) {
+      logBuffer.push({ threadId, msg, type });
+      if (!logFlushPending) {
+        logFlushPending = true;
+        setTimeout(flushLog, 80);
+      }
+    }
+
+    function flushLog() {
+      const body = document.getElementById('logBody');
+      const frag = document.createDocumentFragment();
+      logBuffer.forEach(({ threadId, msg, type }) => {
+        const t = startTime ? ((Date.now() - startTime) / 1000).toFixed(2) : '0.00';
+        const e = document.createElement('div');
+        e.className = 'log-entry';
+        e.innerHTML = `
+          <span class="log-time">${t}s</span>
+          <span class="log-thread">${threadId ? 'Thread ' + threadId : 'SYSTEM'}</span>
+          <span class="log-msg ${type}">${msg}</span>
+        `;
+        frag.appendChild(e);
+        logEntryCount++;
+      });
+      body.prepend(frag);
+      while (body.children.length > 150) body.removeChild(body.lastChild);
+      document.getElementById('logCount').textContent = logEntryCount + ' entries';
+      logBuffer = [];
+      logFlushPending = false;
+    }
+
+    function dispatch() {
+      threadStates.forEach(t => {
+        if (!t.busy && taskQueue.length > 0) {
+          const tid = taskQueue.shift();
+          t.busy = true;
+          t.taskId = tid;
+          setCard(t.id, true, tid);
+
+          const shouldLog = tid <= 10 || tid % 50 === 0 || tid === TOTAL;
+          if (shouldLog) addLog(t.id, `→ started task #${tid}`, 'start');
+
+          const baseDur = 500 + Math.random() * 1000;
+          const duration = baseDur / speedMult;
+          const taskStart = Date.now();
+
+          const prog = document.getElementById('prog-' + t.id);
+          const iv = setInterval(() => {
+            const p = Math.min(100, ((Date.now() - taskStart) / duration) * 100);
+            if (prog) prog.style.width = p + '%';
+            if (p >= 100) clearInterval(iv);
+          }, 40);
+          progIntervals.push(iv);
+
+          const timer = setTimeout(() => {
+            const actual = Date.now() - taskStart;
+            taskDurations.push(actual);
+            if (taskDurations.length > 300) taskDurations.shift();
+
+            completedCount++;
+            t.busy = false;
+            t.tasksCompleted++;
+            const badge = document.getElementById('tbadge-' + t.id);
+            if (badge) badge.textContent = t.tasksCompleted + ' tasks completed';
+            setCard(t.id, false, null);
+
+            if (shouldLog) addLog(t.id, `✓ completed task #${tid}`, 'done');
+
+            updateStats();
+
+            if (completedCount === TOTAL) {
+              finishSim();
+            } else if (taskQueue.length > 0) {
+              dispatch();
+            }
+          }, duration);
+          threadTimers.push(timer);
+        }
+      });
+      updateStats();
+    }
+
+    function finishSim() {
+      simRunning = false;
+      clearInterval(elapsedInterval);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      const rate = (TOTAL / parseFloat(elapsed)).toFixed(1);
+      const banner = document.getElementById('doneBanner');
+      banner.style.display = 'block';
+      banner.textContent = `✓ All 1000 tasks completed in ${elapsed}s — throughput: ${rate} tasks/s across 4 threads`;
+      addLog(null, `All 1000 tasks done in ${elapsed}s @ ${rate} tasks/s`, 'finish');
+      document.getElementById('tpEta').textContent = 'Done!';
+    }
+
+    function startSim() {
+      if (simRunning) return;
+      simRunning = true;
+      startTime = Date.now();
+      const btn = document.getElementById('startBtn');
+      btn.disabled = true;
+
+      // pre-fill queue
+      taskQueue = [];
+      for (let i = 1; i <= TOTAL; i++) taskQueue.push(i);
+      taskCounter = TOTAL + 1;
+
+      addLog(null, `Simulation started — 4 threads, 1000 tasks, speed ${speedMult}×`, 'system');
+
+      elapsedInterval = setInterval(() => {
+        if (!startTime) return;
+        const e = ((Date.now() - startTime) / 1000).toFixed(1);
+        document.getElementById('sElapsed').textContent = e + 's';
+      }, 100);
+
+      dispatch();
+    }
+
+    function updateSpeed(v) {
+      speedMult = parseInt(v);
+      document.getElementById('speedVal').textContent = v + '×';
+    }
+
+    function resetSim() {
+      simRunning = false;
+      clearInterval(elapsedInterval);
+      threadTimers.forEach(clearTimeout);
+      progIntervals.forEach(clearInterval);
+      threadTimers = [];
+      progIntervals = [];
+      taskQueue = [];
+      taskCounter = 1;
+      completedCount = 0;
+      taskDurations = [];
+      logEntryCount = 0;
+      startTime = null;
+
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('doneBanner').style.display = 'none';
+      document.getElementById('sActive').textContent = '0';
+      document.getElementById('sQueued').textContent = '1000';
+      document.getElementById('sDone').textContent = '0';
+      document.getElementById('sElapsed').textContent = '0.0s';
+      document.getElementById('queueFill').style.width = '0%';
+      document.getElementById('qLeft').textContent = '0 / 1000 completed';
+      document.getElementById('qPct').textContent = '0%';
+      document.getElementById('tpRate').textContent = '—';
+      document.getElementById('tpAvg').textContent = '—';
+      document.getElementById('tpEta').textContent = '—';
+      document.getElementById('logBody').innerHTML = '';
+      document.getElementById('logCount').textContent = '0 entries';
+
+      initThreads();
+    }
+
+    // initialise
+    initThreads();
+  </script>
+
+</body>
+</html>
